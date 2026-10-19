@@ -64,6 +64,10 @@ The game backend automatically renders and uploads completed artwork in a
 background thread when hosted sharing is configured. Both player and leaderboard
 QRs wait for that upload, then use its hosted `/images/:id` URL. Upload failures
 are retried while the sharing panel is open and never block gameplay.
+Before the first-round countdown of each match (including rematches), the game
+backend also sends a background `/health` request to wake a sleeping image
+service. Games start immediately without waiting for the request; simultaneous
+games share an in-flight warm-up request.
 
 In **the Python game backend's** `backend/.env`, set:
 
