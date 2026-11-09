@@ -3,16 +3,19 @@ require('dotenv').config({ path: path.join(__dirname, '.env'), quiet: true });
 const mongoose = require('mongoose');
 const { createApp } = require('./src/app');
 const store = require('./src/store');
+const { repository } = require('./src/game-repository');
+const { GameDataService } = require('./src/game-data');
 
 async function start() {
   if (!process.env.MONGODB_URI) throw new Error('Set MONGODB_URI in the service environment.');
   const port = Number(process.env.PORT || 3001);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('PORT must be an integer from 1 to 65535.');
-  const app = createApp({ store, uploadApiKey: process.env.UPLOAD_API_KEY,
+  const app = createApp({ store, gameData: new GameDataService(repository), uploadApiKey: process.env.UPLOAD_API_KEY,
     publicBaseUrl: process.env.PUBLIC_BASE_URL || `http://localhost:${port}`,
     isReady: () => mongoose.connection.readyState === 1 });
   await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 10000 });
   await mongoose.connection.db.admin().ping();
+  await repository.initialize();
   console.log('MongoDB connected successfully. Database ping: OK.');
   const server = app.listen(port, '0.0.0.0', () => console.log(`Artwork sharing service listening on port ${port}`));
   server.on('error', async (error) => {

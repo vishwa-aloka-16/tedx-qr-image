@@ -14,7 +14,7 @@ function validPng(image) {
     && image.subarray(-12).equals(PNG_END);
 }
 
-function createApp({ store, uploadApiKey, publicBaseUrl, isReady = () => true, logger = console }) {
+function createApp({ store, gameData, uploadApiKey, publicBaseUrl, isReady = () => true, logger = console }) {
   if (!uploadApiKey || uploadApiKey.length < 32) throw new Error('UPLOAD_API_KEY must contain at least 32 characters.');
   const publicUrl = new URL(publicBaseUrl);
   if (!['http:', 'https:'].includes(publicUrl.protocol) || publicUrl.username || publicUrl.password
@@ -46,6 +46,17 @@ function createApp({ store, uploadApiKey, publicBaseUrl, isReady = () => true, l
     if (!timingSafeEqual(expectedKey, supplied)) return res.status(401).json({ error: 'Unauthorized upload.' });
     next();
   };
+  app.use('/game-data', authorize, (_req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store');
+    if (!isReady() || !gameData) return res.status(503).json({ error: 'Game data storage is temporarily unavailable.' });
+    next();
+  }, express.json({ limit: '256kb' }));
+  app.get('/game-data/health', async (_req, res) => res.json(await gameData.health()));
+  app.post('/game-data/players/resolve', async (req, res) => res.json(await gameData.resolve(req.body)));
+  app.put('/game-data/matches/:completionId', async (req, res) => res.json(await gameData.save(req.params.completionId, req.body)));
+  app.get('/game-data/leaderboard', async (req, res) => res.json(await gameData.leaderboard(req.query.limit === undefined ? 20 : Number(req.query.limit))));
+  app.post('/game-data/reset', async (req, res) => res.json(await gameData.reset(req.body)));
+  app.post('/game-data/import', async (req, res) => res.json(await gameData.importLegacy(req.body)));
   app.put('/images/:id', authorize, express.raw({ type: 'image/png', limit: '8mb', inflate: false }), async (req, res) => {
     if (!req.is('image/png')) return res.status(415).json({ error: 'Send the PNG bytes with Content-Type: image/png.' });
     if (!validPng(req.body)) return res.status(400).json({ error: 'Send a valid PNG image, no larger than 4096 × 4096.' });
@@ -67,6 +78,8 @@ function createApp({ store, uploadApiKey, publicBaseUrl, isReady = () => true, l
   });
   app.use((_req, res) => res.status(404).json({ error: 'Not found.' }));
   app.use((error, _req, res, _next) => {
+    if (error.publicMessage) return res.status(error.status).json({ error: error.publicMessage, ...(error.publicCode ? { code: error.publicCode } : {}) });
+    if (error.type === 'entity.parse.failed') return res.status(400).json({ error: 'Invalid JSON body.' });
     if (error.type === 'entity.too.large') return res.status(413).json({ error: 'Image exceeds the 8 MB limit.' });
     if (error.status === 415) return res.status(415).json({ error: 'Unsupported content encoding.' });
     logger.error('Artwork request failed:', error.message);

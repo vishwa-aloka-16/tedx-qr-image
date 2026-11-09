@@ -21,6 +21,10 @@ before opening its HTTP port.
 
 ## Routes
 
+The service also stores leaderboard data through authenticated `/game-data/*`
+routes. They reuse the existing `UPLOAD_API_KEY` and MongoDB connection, with no
+new environment variables. See [leaderboard architecture and rollout](../backend/LEADERBOARD_SERVICE.md).
+
 | Method | Route | Purpose |
 |---|---|---|
 | GET | `/health` | Returns 200 when MongoDB is connected, otherwise 503. |
