@@ -10,9 +10,15 @@ const stateSchema = new mongoose.Schema({ _id: String, generation: { type: Strin
 const Profile = mongoose.model('GamePlayerProfile', profileSchema, 'game_player_profiles');
 const Match = mongoose.model('CompletedGameMatch', matchSchema, 'game_matches');
 const State = mongoose.model('GameLeaderboardState', stateSchema, 'game_leaderboard_state');
+const settingsSchema = new mongoose.Schema({ _id: String, settings: { type: mongoose.Schema.Types.Mixed, required: true } }, { ...options, timestamps: true });
+const Settings = mongoose.model('GameAdminSettings', settingsSchema, 'game_admin_settings');
 
 const repository = {
-  async initialize() { await Promise.all([Profile.init(), Match.init(), State.init()]); await this.generation(); },
+  async initialize() { await Promise.all([Profile.init(), Match.init(), State.init(), Settings.init()]); await this.generation(); },
+  async settings() { return (await Settings.findById('admin').lean())?.settings ?? null; },
+  async saveSettings(settings) {
+    await Settings.findOneAndUpdate({ _id: 'admin' }, { $set: { settings } }, { upsert: true, runValidators: true });
+  },
   async generation() {
     let state;
     try { state = await State.findOneAndUpdate({ _id: 'leaderboard' },

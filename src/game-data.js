@@ -26,6 +26,26 @@ function canonicalPlayers(input, imported = false) {
 class GameDataService {
   constructor(repository) { this.repo = repository; this.cache = null; }
   async health() { return { status: 'ok', generation: await this.repo.generation() }; }
+  async settings() { return { settings: await this.repo.settings() }; }
+  async saveSettings(body) {
+    const s = body?.settings;
+    const number = (v, min, max) => typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max;
+    if (!s || typeof s.model_key !== 'string' || s.model_key.length > 100
+      || !Number.isInteger(s.round_seconds) || !number(s.round_seconds, 10, 600)
+      || !Number.isInteger(s.required_hits) || !number(s.required_hits, 1, 10)
+      || !number(s.confidence_threshold, .01, 1) || !number(s.prediction_gap_seconds, .1, 5)
+      || !Array.isArray(s.cosmetic_draw_seconds_by_round) || s.cosmetic_draw_seconds_by_round.length !== 6
+      || !s.cosmetic_draw_seconds_by_round.every((v) => number(v, 0, 10))
+      || !Array.isArray(s.excluded_classes) || !s.excluded_classes.every((v) => typeof v === 'string')
+      || !s.class_difficulties || Array.isArray(s.class_difficulties) || typeof s.class_difficulties !== 'object'
+      || !Object.values(s.class_difficulties).every((v) => ['easy', 'medium', 'hard'].includes(v))) {
+      fail(400, 'Invalid admin settings.');
+    }
+    const settings = Object.fromEntries(['model_key', 'round_seconds', 'required_hits', 'confidence_threshold',
+      'prediction_gap_seconds', 'cosmetic_draw_seconds_by_round', 'excluded_classes', 'class_difficulties'].map((key) => [key, s[key]]));
+    await this.repo.saveSettings(settings);
+    return { status: 'saved' };
+  }
   async profile(name, preferred) {
     name = nameOf(name);
     const old = await this.repo.profile(name);

@@ -118,7 +118,15 @@ Use the same upload key in the game backend. Keep it out of browser code and
 open the image directly; the installed `cores` package is unrelated to CORS and
 is not used here.
 
-## Validation
+## Admin settings persistence
+
+Gameplay admin settings are stored separately in `game_admin_settings`, document
+`admin`. Private `GET /game-data/settings` and `PUT /game-data/settings` reuse
+`UPLOAD_API_KEY`. Deploy this service before the Python backend that restores
+these settings. No new environment variables are required; leaderboard resets
+preserve the configuration. Passwords and admin login tokens are not stored here.
+
+## Running tests
 
 ```powershell
 npm test

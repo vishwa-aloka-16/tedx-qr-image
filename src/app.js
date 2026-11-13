@@ -52,6 +52,8 @@ function createApp({ store, gameData, uploadApiKey, publicBaseUrl, isReady = () 
     next();
   }, express.json({ limit: '256kb' }));
   app.get('/game-data/health', async (_req, res) => res.json(await gameData.health()));
+  app.get('/game-data/settings', async (_req, res) => res.json(await gameData.settings()));
+  app.put('/game-data/settings', async (req, res) => res.json(await gameData.saveSettings(req.body)));
   app.post('/game-data/players/resolve', async (req, res) => res.json(await gameData.resolve(req.body)));
   app.put('/game-data/matches/:completionId', async (req, res) => res.json(await gameData.save(req.params.completionId, req.body)));
   app.get('/game-data/leaderboard', async (req, res) => res.json(await gameData.leaderboard(req.query.limit === undefined ? 20 : Number(req.query.limit))));

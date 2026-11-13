@@ -7,6 +7,8 @@ const { createApp } = require('../src/app');
 class MemoryRepository {
   constructor() { this.epoch = 'initial-generation-000001'; this.people = new Map(); this.matches = new Map(); }
   async generation() { return this.epoch; }
+  async settings() { return this.savedSettings ?? null; }
+  async saveSettings(settings) { this.savedSettings = structuredClone(settings); }
   async profile(name) { return this.people.get(name); }
   async emojis() { return [...this.people.values()].map((p) => p.emoji); }
   async insertProfile(profile) {
@@ -55,6 +57,34 @@ function request(path, method = 'GET', payload, key = KEY) {
 function match(scoreA = 3000, scoreB = 1500) {
   return { generation: repo.epoch, players: [{ name: 'Alice', score: scoreA, wins: 3 }, { name: 'Bob', score: scoreB, wins: 2 }] };
 }
+
+function adminSettings() {
+  return { model_key: 'tensorflow_50', round_seconds: 55, required_hits: 3, confidence_threshold: .6,
+    prediction_gap_seconds: .2, cosmetic_draw_seconds_by_round: [.5, .5, 1, 1.5, 3, 3],
+    excluded_classes: ['bus'], class_difficulties: { apple: 'easy', bus: 'hard' } };
+}
+
+test('admin settings require the existing key and survive service recreation and leaderboard reset', async () => {
+  assert.equal((await request('/settings', 'GET', undefined, 'wrong')).status, 401);
+  assert.equal((await request('/settings', 'PUT', { settings: adminSettings() }, 'wrong')).status, 401);
+  assert.deepEqual(await (await request('/settings')).json(), { settings: null });
+  const settings = adminSettings();
+  assert.equal((await request('/settings', 'PUT', { settings })).status, 200);
+  assert.deepEqual(await (await request('/settings')).json(), { settings });
+  const restarted = new GameDataService(repo);
+  await restarted.reset({ generation: repo.epoch, reset_id: 'reset-identity-0000001' });
+  assert.deepEqual(await restarted.settings(), { settings });
+});
+
+test('invalid admin settings cannot overwrite a saved configuration', async () => {
+  const settings = adminSettings();
+  await service.saveSettings({ settings });
+  for (const change of [{ round_seconds: 0 }, { required_hits: true }, { confidence_threshold: 2 },
+    { cosmetic_draw_seconds_by_round: [1] }, { class_difficulties: { apple: 'invalid' } }]) {
+    assert.equal((await request('/settings', 'PUT', { settings: { ...settings, ...change } })).status, 400);
+  }
+  assert.deepEqual(await service.settings(), { settings });
+});
 
 test('game data uses the existing upload key and rejects public writes and reset', async () => {
   for (const [path, method, body] of [['/health', 'GET'], ['/players/resolve', 'POST', { name: 'Alice' }], ['/matches/match-identity-000001', 'PUT', match()], ['/reset', 'POST', {}]]) {
